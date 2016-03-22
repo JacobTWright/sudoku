@@ -1,4 +1,5 @@
 import numpy as np
+import time
 
 
 #Plan of attack: accept gameboard as numpy array.
@@ -19,6 +20,7 @@ class Board(object):
         self.__board=np.zeros((9,9),np.uint8)
         self.__poss=np.ones((9,9,9),np.bool) #use 3D array to hold possible numbers 
         self.__batchUpdate(grid)
+        self.count=0
 
     @classmethod
     def load(cls, filename):
@@ -111,6 +113,80 @@ class Board(object):
     def getBoard(self):
         return np.array(self.__board,np.uint8)
 
+    def getPoss(self):
+        return np.array(self.__poss,np.bool)
+
+    def checkValid(self):
+        """Make sure the solution is valid."""
+        #it better be.
+        #make sure every row has one of each val.
+        for number in range(1,10):
+            for row in range(9):
+                if not np.sum(self.__board[row,:]==number)==1:
+                    return False
+            for col in range(9):
+                if not np.sum(self.__board[row,:]==number)==1:
+                    return False
+            for row in range(0,9,3):
+                for col in range(0,9,3):
+                    if not np.sum(self.__board[row:row+3,col:col+3]==number)==1:
+                        return False
+        return True
+
+    def solve(self):
+        """Guaranteed to solve the game because it will guess!"""
+        start=time.time()
+        solved=self.simpleSolve()
+        if not solved:
+            #recursive guessing!
+            self.__guess(self.__board,self.__poss)
+        #whoo! we are solved.
+        if self.checkValid():
+            print 'Solved in {0:.3f} seconds!'.format(time.time()-start)
+            self.printBoard()
+        else:
+            print 'Aww man!'
+
+    def randSolve(self):
+        self.__board=np.zeros((9,9),np.uint8)
+        self.__poss=np.ones((9,9,9),np.bool)
+        self.solve()
+
+    def __guess(self,board,poss):
+        """
+        Doing a depth search guessing algorithm.  Guess, try and solve, guess more.  If impossible, return false.
+        """
+        #First, identify lowest risk area.
+        board=np.array(board,np.uint8)
+        poss=np.array(poss,np.uint8)
+        p=np.sum(poss,axis=0)
+        if not np.sum(p) == 0:
+            p[p==0]=255
+            y,x=np.nonzero(p==np.min(p))
+            zipped=zip(y,x)
+            for option in zipped:
+                vals=np.nonzero(self.__poss[:,option[0],option[1]])[0]+1
+                np.random.shuffle(vals)
+                for val in vals: 
+                    self.updateBoard(option,val) 
+                    if self.simpleSolve():
+                        return True
+                    #if we are here it isn't solved yet
+                    #try another guess.
+                    if self.__guess(self.__board,self.__poss):
+                        return True
+                    #if we are here, reset the board.
+                    self.__board=board
+                    self.__poss=poss
+
+                    
+        elif np.sum(board) == 405:
+            return True
+        self.__board=board #return to how we found it!
+        self.__poss=poss
+        return False
+
+
     def __pairExclusion(self):
         """Method to reduce possibilities by induction.  Expensive, so called only when needed.
         This catches the standard 'swordfish' and 'xwing' solving techniques.
@@ -175,8 +251,8 @@ class Board(object):
                                 self.__poss[plane,row+y[0],:]=False
                                 self.__poss[plane,row:row+3,col:col+3][y,x]=True #and reset our remaining values
                                 reduced=True
-        #TODO: repeat same check for row start (propogates to cols and cells)
-        #e.g. row needs value, all possible locations are in one cell, remove other possibilities in that cell
+
+        #Do the same thing by rows
         for plane in range(0,9):
             for row in range(9):
                 x=np.nonzero(self.__poss[plane,row,:])[0]
@@ -190,7 +266,7 @@ class Board(object):
                             self.__poss[plane,row,:][x]=True
                             reduced=True
 
-        #TODO: repeat same check for col start (propogates to cells)
+        #Do the same thing by cols
         for plane in range(0,9):
             for col in range(9):
                 y=np.nonzero(self.__poss[plane,:,col])[0]
@@ -216,6 +292,7 @@ class Board(object):
         """Simplest solving method, brute force.  Returns True if solved successfully, false if not."""
         #this will always return false.  this is a terrible strategy.
         #TODO: add 'by cell' checks. Currently there is no deductive reasoning strategy.
+        self.count+=1
         while True:
             updated=False
             for i in range(9):
@@ -263,4 +340,4 @@ class Board(object):
                     return False
 
 if __name__=='__main__':
-    print 'this is example code to add to get repo.'
+    print 'this is example code to add to git repo.'
